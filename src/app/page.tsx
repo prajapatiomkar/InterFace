@@ -1,103 +1,155 @@
-import Image from "next/image";
+"use client";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [URL, setURL] = useState("");
+  const [inputPrompt, setInputPrompt] = useState("");
+  const [inputModel, setInputModel] = useState("");
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const savedURL = localStorage.getItem("apiURL");
+    const savedModel = localStorage.getItem("apiModel");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    if (savedURL && savedModel) {
+      setURL(savedURL);
+      setInputModel(savedModel);
+      setOpen(false); // skip dialog
+    } else {
+      setOpen(true); // show dialog
+    }
+  }, []);
+
+  const handleTheSubmit = async () => {
+    setLoading(true);
+    setMessage("");
+    const response = await fetch(URL, {
+      method: "POST",
+      body: JSON.stringify({
+        model: inputModel,
+        prompt: inputPrompt,
+      }),
+    });
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    if (reader) {
+      let done = false;
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        const chunk = decoder.decode(value, { stream: true });
+
+        chunk.split("\n").forEach((line) => {
+          if (line.trim()) {
+            try {
+              const json = JSON.parse(line);
+              if (json.response) {
+                setMessage((prev) => prev + json.response);
+              }
+            } catch (e) {
+              console.error("Error parsing JSON line:", e);
+            }
+          }
+        });
+      }
+    }
+    setLoading(false);
+  };
+
+  const handleTheDialogSubmit = () => {
+    if (URL && inputModel) {
+      localStorage.setItem("apiURL", URL);
+      localStorage.setItem("apiModel", inputModel);
+      setOpen(false);
+    }
+  };
+  return (
+    <div className="">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <form>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Details</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4">
+              <div className="grid gap-3">
+                <Label htmlFor="url">URL</Label>
+                <Input
+                  id="url"
+                  name="url"
+                  placeholder="http://localhost:11434"
+                  onChange={(e) => setURL(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-3">
+                <Label htmlFor="model">Model</Label>
+                <Input
+                  id="model"
+                  name="model"
+                  placeholder="llama"
+                  onChange={(e) => setInputModel(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button
+                type="submit"
+                disabled={false}
+                onClick={handleTheDialogSubmit}
+              >
+                Save changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </form>
+      </Dialog>
+
+      <div className="flex justify-between py-4">
+        <Link href="/">
+          <Button variant="link" className="text-2xl">
+            InterFace
+          </Button>
+        </Link>
+      </div>
+
+      <div className="flex flex-col items-center px-4 py-6">
+        <div className="flex w-full max-w-2xl gap-2">
+          <Input
+            className="flex-1"
+            onChange={(e) => setInputPrompt(e.target.value)}
+            placeholder="Enter your prompt..."
+          />
+          <Button
+            onClick={handleTheSubmit}
+            disabled={loading || inputPrompt.trim() === ""}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            {loading ? "Generating..." : "Generate Answer"}
+          </Button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <div className="mt-6 w-full max-w-2xl whitespace-pre-wrap text-lg border border-gray-200 rounded-md p-4 bg-gray-50">
+          {message.length > 0 ? message : "No response yet"}
+        </div>
+      </div>
     </div>
   );
 }
